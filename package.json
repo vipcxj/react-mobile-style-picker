@@ -1,0 +1,68 @@
+{
+  "name": "react-mobile-style-picker",
+  "version": "1.0.0",
+  "description": "A react mobile style picker component optimized for web used",
+  "homepage": "https://vipcxj.github.io/react-mobile-style-picker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vipcxj/react-mobile-style-picker.git"
+  },
+  "license": "MIT",
+  "author": "Xiaojing Chen <vipcxj@126.com> (https://github.com/vipcxj)",
+  "bugs": {
+    "url": "https://github.com/vipcxj/react-mobile-style-picker/issues"
+  },
+  "main": "dist/index.js",
+  "module": "dist/index.es.js",
+  "files": [
+    "dist"
+  ],
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "rollup -c",
+    "watch": "rollup -cw",
+    "storybook": "start-storybook",
+    "build-storybook": "build-storybook",
+    "deploy-storybook": "storybook-to-ghpages",
+    "lint": "tslint -p . 'src/**/*.{ts,tsx}'",
+    "prepublishOnly": "npm run build",
+    "clean": "git clean -fdX .",
+    "precommit": "npm run lint"
+  },
+  "dependencies": {
+    "classnames": "^2.2.6",
+    "resize-observer-polyfill": "^1.5.1"
+  },
+  "devDependencies": {
+    "@storybook/addon-info": "^5.1.10",
+    "@storybook/addon-knobs": "^5.1.10",
+    "@storybook/react": "^5.1.10",
+    "@storybook/storybook-deployer": "^2.8.1",
+    "@types/classnames": "^2.2.9",
+    "@types/react": "^16.8.25",
+    "@types/react-dom": "^16.8.5",
+    "@types/storybook__addon-knobs": "^5.0.3",
+    "@types/storybook__react": "^4.0.2",
+    "babel-loader": "^8.0.6",
+    "less": "^3.9.0",
+    "less-loader": "^5.0.0",
+    "react": "^16.8.6",
+    "react-docgen-typescript-loader": "^3.1.0",
+    "react-dom": "^16.8.6",
+    "rollup": "^1.19.2",
+    "rollup-plugin-less": "^1.1.2",
+    "rollup-plugin-typescript2": "^0.22.1",
+    "ts-loader": "^6.0.4",
+    "tslint": "^5.18.0",
+    "tslint-config-prettier": "^1.18.0",
+    "tslint-eslint-rules": "^5.4.0",
+    "tslint-react": "^4.0.0",
+    "typescript": "^3.5.3"
+  },
+  "keywords": [
+    "react",
+    "picker",
+    "mobile",
+    "web"
+  ]
+}
