@@ -3,14 +3,14 @@ import less from 'rollup-plugin-less';
 import typescript from 'rollup-plugin-typescript2'
 import pkg from './package.json'
 export default {
-  input: 'src/index.ts',
+  input: ['src/index.ts', 'src/index.less'],
   output: [
     {
-      file: pkg.main,
+      dir: 'cjs',
       format: 'cjs',
     },
     {
-      file: pkg.module,
+      dir: 'es',
       format: 'es',
     },
   ],
@@ -25,13 +25,14 @@ export default {
     }),
     less({
       insert: false,
-      output: 'index.css',
+      output: ['cjs/index.css', 'es/index.css'],
       include: 'src/index.less',
     }),
     copy({
       targets: [
-        { src: 'src/index.less', dest: 'dist'}
-      ]
+        { src: 'src/index.less', dest: 'cjs' },
+        { src: 'src/index.less', dest: 'es' },
+      ],
     }),
   ],
 }
