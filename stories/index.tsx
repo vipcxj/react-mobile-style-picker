@@ -1,6 +1,6 @@
 import { storiesOf } from '@storybook/react';
-import React from 'react';
-import Picker from '../src/index';
+import * as React from 'react';
+import Picker, { smooth } from '../src/index';
 import '../src/index.less';
 
 // tslint:disable-next-line:no-console
@@ -17,11 +17,14 @@ const onClick2 = (evt: React.MouseEvent<HTMLButtonElement>) => {
 };
 
 export const stories = storiesOf('Picker', module);
+const margin = (offset: number) => {
+    return offset === 0 ? 18 : 0;
+};
 stories.add(
     'base',
     () => {
         return (
-            <Picker>
+            <Picker itemMargin={smooth(margin)} rotate={true}>
                 <Picker.Item value={0}>zero</Picker.Item>
                 <Picker.Item value={1} onClick={onClick0}>
                     one

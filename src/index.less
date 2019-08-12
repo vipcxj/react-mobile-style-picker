@@ -1,8 +1,8 @@
-.rmc-picker {
-  height: 238px; /*34*7*/
+.m-style-picker {
+  min-height: 34px;
 }
 
-.rmc-picker-item {
+.m-style-picker-item {
   font-size: 16px;
   padding: 0 10px;
   white-space: nowrap;
@@ -16,7 +16,7 @@
   flex-shrink: 0;
 }
 
-.rmc-picker {
+.m-style-picker {
   display: block;
   position: relative;
   overflow: hidden;
@@ -25,57 +25,56 @@
   text-align: center;
 }
 
-.rmc-picker-mask {
+.m-style-picker-mask {
   position: absolute;
   left: 0;
   top: 0;
-  height: 100%;
-  margin: 0 auto;
-  width: 100%;
+  margin: 0;
   z-index: 3;
   background-repeat: no-repeat;
+  background-size: 100% 100%;
   pointer-events: none;
 }
 
-.rmc-picker-mask-vertical {
+.m-style-picker-mask-vertical {
   background-image: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)), linear-gradient(to top, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6));
   background-position: top, bottom;
 }
 
-.rmc-picker-mask-horizontal {
+.m-style-picker-mask-horizontal {
   background-image: linear-gradient(to right, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6)), linear-gradient(to left, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.6));
   background-position: left, right;
 }
 
-.rmc-picker-content {
+.m-style-picker-content {
   position: absolute;
   left: 0;
   top: 0;
   z-index: 1;
 }
 
-.rmc-picker-content-vertical {
+.m-style-picker-content-vertical {
   width: 100%;
 }
 
-.rmc-picker-content-horizontal {
+.m-style-picker-content-horizontal {
   display: flex;
   height: 100%;
 }
 
-.rmc-picker-indicator {
+.m-style-picker-indicator {
   box-sizing: border-box;
   position: absolute;
   z-index: 3;
   pointer-events: none;
 }
 
-.rmc-picker-indicator-vertical {
+.m-style-picker-indicator-vertical {
   border-top: 1px solid #ddd;
   border-bottom: 1px solid #ddd;
 }
 
-.rmc-picker-indicator-horizontal {
+.m-style-picker-indicator-horizontal {
   border-left: 1px solid #ddd;
   border-right: 1px solid #ddd;
 }

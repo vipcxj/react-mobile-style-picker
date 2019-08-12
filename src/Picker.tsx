@@ -1,10 +1,12 @@
 import classNames from 'classnames';
 import * as React from 'react';
+import ResizeObserver from 'resize-observer-polyfill';
+import { clamp } from './tools';
 
 export interface IPickerProps {
     disabled?: boolean;
-    selectedValue?: any;
-    onValueChange?: (value: any) => void;
+    value?: any;
+    onChange?: (value: any) => void;
     itemStyle?: any;
     children?: Array<React.ReactElement<IItemProps>>;
     mode?: 'vertical'|'horizontal'
@@ -12,20 +14,19 @@ export interface IPickerProps {
     itemWeight?: number | ((offset: number) => number);
     itemMargin?: number | ((offset: number) => number);
     size?: number;
-    /** web only */
-    prefixCls?: string;
     indicatorStyle?: any;
     indicatorClassName?: string;
     className?: string;
-    defaultSelectedValue?: any;
+    defaultValue?: any;
     style?: React.CSSProperties;
     onScrollChange?: (value: any) => void;
     noAnimate?: boolean;
-    rotate?: number;
+    rotate?: boolean | number;
+    mask?: boolean | [number, number];
 }
 
 interface IPickerState {
-    selectedValue?: any;
+    value?: any;
     rootHeight: number;
     rootWidth: number;
     centerOffset: number;
@@ -36,7 +37,7 @@ export interface IItemProps extends React.HTMLAttributes<HTMLDivElement> {
     className?: string;
     style?: React.CSSProperties;
 }
-
+const PREFIX_CLASS = 'm-style-picker';
 const Item = (ignored: IItemProps): null => null;
 
 const createVelocity = (minInterval: number = 30, maxInterval: number = 100) => {
@@ -264,27 +265,30 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
 
     private contentRef: HTMLDivElement;
     private indicatorRef: HTMLDivElement;
-    private maskRef: HTMLDivElement;
+    private maskRef1: HTMLDivElement;
+    private maskRef2: HTMLDivElement;
     private rootRef: HTMLDivElement;
     private readonly gridsRef: Array<React.RefObject<HTMLDivElement>>;
+    private readonly gridsOffset: number[];
     private readonly items: React.ReactNode[];
     private scrollValue: number;
+    private observer: ResizeObserver;
 
     public constructor(props: IPickerProps) {
         super(props);
 
         let selectedValueState;
-        const { selectedValue, defaultSelectedValue } = this.props;
-        if (selectedValue !== undefined) {
-            selectedValueState = selectedValue;
-        } else if (defaultSelectedValue !== undefined) {
-            selectedValueState = defaultSelectedValue;
+        const { value, defaultValue } = this.props;
+        if (value !== undefined) {
+            selectedValueState = value;
+        } else if (defaultValue !== undefined) {
+            selectedValueState = defaultValue;
         } else {
             const children: any = React.Children.toArray(this.props.children);
             selectedValueState = children && children[0] && children[0].props.value;
         }
         this.state = {
-            selectedValue: selectedValueState,
+            value: selectedValueState,
             rootWidth: 0,
             rootHeight: 0,
             centerOffset: 0,
@@ -292,26 +296,22 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         this.items = [];
         const size = this.normedSize();
         this.gridsRef = [];
+        this.gridsOffset = [];
         for (let i = 0; i < size; ++i) {
             this.gridsRef[i] = React.createRef();
+            this.gridsOffset[i] = 0;
         }
     }
 
     public componentDidMount() {
-        const { contentRef, indicatorRef, maskRef, rootRef } = this;
-        const { mode = "vertical" } = this.props;
-        const state = this.setRootSize(rootRef.getBoundingClientRect().width, rootRef.getBoundingClientRect().height);
-        if (mode === 'vertical') {
-            contentRef.style.padding = `${state.centerOffset}px 0`;
-            indicatorRef.style.top = `${state.centerOffset}px`;
-            maskRef.style.backgroundSize = `100% ${state.centerOffset}px`;
-        } else {
-            contentRef.style.padding = `0 0 0 ${state.centerOffset}px`;
-            indicatorRef.style.left = `${state.centerOffset}px`;
-            maskRef.style.backgroundSize = `${state.centerOffset}px, 100%`;
-        }
+        const { rootRef } = this;
+        this.layout(rootRef.getBoundingClientRect().width, rootRef.getBoundingClientRect().height);
+        this.observer = new ResizeObserver(() => {
+            this.layout(rootRef.getBoundingClientRect().width, rootRef.getBoundingClientRect().height);
+        });
+        this.observer.observe(rootRef);
         this.scrollHandlers.setDisabled(this.props.disabled);
-        this.select(this.state.selectedValue, this.scrollTo);
+        this.select(this.state.value, this.scrollTo);
 
         const passiveSupported = this.passiveSupported();
         const willPreventDefault = passiveSupported ? { passive: false } : false;
@@ -340,16 +340,17 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         rootRef.removeEventListener('wheel', this.scrollHandlers.wheel);
         rootRef.removeEventListener('mousewheel', this.scrollHandlers.wheel);
         rootRef.removeEventListener('DOMMouseScroll', this.scrollHandlers.wheel);
+        this.observer.disconnect();
     }
 
     public componentWillReceiveProps(nextProps: IPickerProps) {
-        if ('selectedValue' in nextProps) {
-            if (this.state.selectedValue !== nextProps.selectedValue) {
+        if ('value' in nextProps) {
+            if (this.state.value !== nextProps.value) {
                 this.setState({
-                    selectedValue: nextProps.selectedValue,
+                    value: nextProps.value,
                 }, () => {
                     this.select(
-                        nextProps.selectedValue,
+                        nextProps.value,
                         nextProps.noAnimate ? this.scrollToWithoutAnimation : this.scrollTo,
                     );
                 });
@@ -359,28 +360,30 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     }
 
     public shouldComponentUpdate(nextProps: Readonly<IPickerProps>, nextState: Readonly<IPickerState>) {
-        return this.state.selectedValue !== nextState.selectedValue
+        return this.state.value !== nextState.value
             || this.state.rootWidth !== nextState.rootWidth
             || this.state.rootHeight !== nextState.rootHeight
+            || this.props.itemSize !== nextProps.itemSize
+            || this.props.itemWeight !== nextProps.itemWeight
+            || this.props.itemMargin !== nextProps.itemMargin
             || this.props.children !== nextProps.children;
     }
 
     public componentDidUpdate() {
-        this.select(this.state.selectedValue, this.scrollToWithoutAnimation);
+        this.select(this.state.value, this.scrollToWithoutAnimation);
     }
 
     public render() {
         const { props } = this;
         const {
-            prefixCls = 'rmc-picker',
             mode = 'vertical',
             itemStyle,
             indicatorClassName = '',
             children,
         } = props;
-        const { selectedValue } = this.state;
-        const itemClassName = `${prefixCls}-item`;
-        const selectedItemClassName = `${itemClassName} ${prefixCls}-item-selected`;
+        const itemClassName = `${PREFIX_CLASS}-item`;
+        const selectedItemClassName = `${itemClassName} ${PREFIX_CLASS}-item-selected`;
+        const numChildren = React.Children.count(children);
         const map = (item: React.ReactElement<IItemProps>, index: number) => {
             const { className = '', style, value, onClick, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, ...rest } = item.props;
             let startX: number;
@@ -433,8 +436,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                     height: itemSize,
                     lineHeight: `${itemSize}px`,
                     width: '100%',
-                    marginTop: margin,
-                    marginBottom: margin,
+                    margin: `${index === 0 ? 0 : margin}px 0px ${index === numChildren - 1 ? 0 : margin}px 0px`,
                 }
             } else {
                 finalStyle = {
@@ -444,14 +446,13 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                     width: itemSize,
                     lineHeight: `${this.state.rootHeight}px`,
                     float: "left",
-                    marginLeft: margin,
-                    marginRight: margin,
+                    margin: `0px ${index === 0 ? 0 : margin}px 0px ${index === numChildren - 1 ? 0 : margin}px`,
                 }
             }
             return (
                 <div
                     style={finalStyle}
-                    className={`${selectedValue === value ? selectedItemClassName : itemClassName} ${className}`}
+                    className={`${value === this.state.value ? selectedItemClassName : itemClassName} ${className}`}
                     key={value}
                     ref={ref => this.items[index] = ref}
                     onMouseDown={onMStart}
@@ -469,7 +470,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const items = React.Children ? React.Children.map(children, map) : ([] as any[]).concat(children).map(map);
         const pickerCls = {
             [props.className as string]: !!props.className,
-            [prefixCls as string]: true,
+            [PREFIX_CLASS as string]: true,
         };
 
         let pickerStyle: React.CSSProperties;
@@ -479,43 +480,42 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             pickerStyle = {
                 ...props.style,
             };
-            if (!(pickerStyle as any).height) {
-                (pickerStyle as any).height = this.calcContainerSizeByProps();
+            if (!pickerStyle.height) {
+                pickerStyle.height = this.calcContainerSizeByProps();
             }
             indicatorStyle = {
                 ...props.indicatorStyle,
                 width: '100%',
                 height: indicatorSize,
                 left: 0,
-                top: this.state.centerOffset,
             }
         } else {
             pickerStyle = {
                 ...props.style,
             };
-            if (!(pickerStyle as any).width && this.props.itemSize) {
-                (pickerStyle as any).width = this.calcContainerSizeByProps();
+            if (!pickerStyle.width && this.props.itemSize) {
+                pickerStyle.width = this.calcContainerSizeByProps();
             }
             indicatorStyle = {
                 ...props.indicatorStyle,
                 width: indicatorSize,
                 height: '100%',
-                left: this.state.centerOffset,
                 top: 0,
             }
         }
         return (
             <div className={classNames(pickerCls)} ref={el => this.rootRef = el} style={pickerStyle}>
-                <div className={`${prefixCls}-mask ${prefixCls}-mask-${mode}`} ref={el => this.maskRef = el} />
+                <div className={`${PREFIX_CLASS}-mask`} ref={el => this.maskRef1 = el} />
+                <div className={`${PREFIX_CLASS}-mask`} ref={el => this.maskRef2 = el} />
                 <div
-                    className={`${prefixCls}-indicator ${prefixCls}-indicator-${mode} ${indicatorClassName}`}
+                    className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${indicatorClassName}`}
                     ref={el => this.indicatorRef = el}
                     style={indicatorStyle}
                 />
-                <div className={`${prefixCls}-content ${prefixCls}-content-${mode}`} ref={el => this.contentRef = el}>
+                <div className={`${PREFIX_CLASS}-content ${PREFIX_CLASS}-content-${mode}`} ref={el => this.contentRef = el}>
                     {items}
                 </div>
-                <div className={`m-style-picker-grids-${mode}`}>
+                <div className={`${PREFIX_CLASS}-grids-${mode}`}>
                     { this.createGrids() }
                 </div>
             </div>
@@ -523,22 +523,60 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     }
 
     public getValue = () => {
-        if ('selectedValue' in this.props) {
-            return this.props.selectedValue;
+        if ('value' in this.props) {
+            return this.props.value;
         }
         const children: any = React.Children.toArray(this.props.children);
         return children && children[0] && children[0].props.value;
     };
 
-    private setRootSize = (width: number, height: number) => {
-        const { mode = 'vertical' } = this.props;
+    private layout = (width: number, height: number) => {
+        const { mode = 'vertical', mask = true } = this.props;
         let centerOffset: number;
         const base = this.calcBaseItemSize(width, height);
-        if (mode === 'vertical') {
-            centerOffset = (height - this.calcItemSize(0, base)) / 2;
+        let maskValue: [number, number];
+        if (typeof mask === 'boolean') {
+            maskValue = mask ? [0.5, 0.9] : [0, 0];
         } else {
-            centerOffset = (width - this.calcItemSize(0, base)) / 2;
+            maskValue = mask;
         }
+        const indicatorUpMargin = this.calcItemMargin(0, 1);
+        const indicatorDownMargin = this.calcItemMargin(0, -1);
+        const indicatorSize = this.calcItemSize(0, base) + indicatorUpMargin + indicatorDownMargin;
+        if (mode === 'vertical') {
+            centerOffset = (height - indicatorSize) / 2;
+            this.contentRef.style.top = `${centerOffset + indicatorUpMargin}px`;
+            this.indicatorRef.style.top = `${centerOffset + indicatorUpMargin}px`;
+            this.maskRef1.style.backgroundImage = `linear-gradient(to bottom, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
+            this.maskRef1.style.backgroundPosition = 'top';
+            this.maskRef1.style.top = '0px';
+            this.maskRef1.style.left = '0px';
+            this.maskRef1.style.width = '100%';
+            this.maskRef1.style.height = `${centerOffset}px`;
+            this.maskRef2.style.backgroundImage = `linear-gradient(to top, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
+            this.maskRef2.style.backgroundPosition = 'bottom';
+            this.maskRef2.style.top = `${centerOffset + indicatorSize}px`;
+            this.maskRef1.style.left = '0px';
+            this.maskRef2.style.width = '100%';
+            this.maskRef2.style.height = `${centerOffset}px`;
+        } else {
+            centerOffset = (width - indicatorSize) / 2;
+            this.contentRef.style.left = `${centerOffset + indicatorUpMargin}px`;
+            this.indicatorRef.style.left = `${centerOffset + indicatorUpMargin}px`;
+            this.maskRef1.style.backgroundImage = `linear-gradient(to right, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
+            this.maskRef1.style.backgroundPosition = 'left';
+            this.maskRef1.style.top = '0px';
+            this.maskRef1.style.left = '0px';
+            this.maskRef1.style.height = '100%';
+            this.maskRef1.style.width = `${centerOffset}px`;
+            this.maskRef2.style.backgroundImage = `linear-gradient(to left, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
+            this.maskRef2.style.backgroundPosition = 'right';
+            this.maskRef2.style.top = '0px';
+            this.maskRef2.style.left = `${centerOffset + indicatorSize}px`;
+            this.maskRef2.style.height = '100%';
+            this.maskRef2.style.width = `${centerOffset}px`;
+        }
+        this.createGridsOffset();
         const state = {
             rootWidth: width,
             rootHeight: height,
@@ -549,23 +587,31 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     };
 
     private getGridRef = (offset: number, maxOffset?: number): React.RefObject<HTMLDivElement> => {
-        if (maxOffset === undefined) { maxOffset = this.calcMaxOffset(); }
+        maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
         return this.gridsRef[offset + maxOffset];
     };
 
-    private getGridOffset = (offset: number, maxOffset?: number) => {
+    private createGridsOffset = (maxOffset?: number) => {
+        maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
+        const { mode = 'vertical' } = this.props;
         const centerGridRef = this.getGridRef(0, maxOffset);
-        const gridRef = this.getGridRef(offset, maxOffset);
-        if (centerGridRef.current && gridRef.current) {
-            const { mode = 'vertical' } = this.props;
-            if (mode === 'vertical') {
-                return gridRef.current.getBoundingClientRect().top - centerGridRef.current.getBoundingClientRect().top;
+        for (let offset = -maxOffset; offset <= maxOffset; ++offset) {
+            const gridRef = this.getGridRef(offset, maxOffset);
+            if (centerGridRef.current && gridRef.current) {
+                if (mode === 'vertical') {
+                    this.gridsOffset[offset + maxOffset] = gridRef.current.getBoundingClientRect().top - centerGridRef.current.getBoundingClientRect().top;
+                } else {
+                    this.gridsOffset[offset + maxOffset] = gridRef.current.getBoundingClientRect().left - centerGridRef.current.getBoundingClientRect().left;
+                }
             } else {
-                return gridRef.current.getBoundingClientRect().left - centerGridRef.current.getBoundingClientRect().left;
+                this.gridsOffset[offset + maxOffset] = 0;
             }
-        } else {
-            return 0;
         }
+    };
+
+    private getGridOffset = (offset: number, maxOffset?: number) => {
+        maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
+        return this.gridsOffset[offset + maxOffset];
     };
 
     private createGrids = () => {
@@ -578,7 +624,9 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             const style = {
                 flexGrow: size,
                 flexShrink: size,
-                margin: mode === 'vertical' ? `${margin}px 0px ${margin}px 0px` : `0px ${margin}px 0px ${margin}px`,
+                margin: mode === 'vertical'
+                    ? `${i === maxOffset ? 0 : margin}px 0px ${i === -maxOffset ? 0 : margin}px 0px`
+                    : `0px ${i === maxOffset ? 0 : margin}px 0px ${i === -maxOffset ? 0 : margin}px`,
             };
             nodes.push(
                 <div key={i} className="m-style-picker-grid" style={style} ref={this.getGridRef(i, maxOffset)} />
@@ -693,13 +741,14 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
         const max = this.getGridOffset(maxOffset, maxOffset);
         const scroll = this.scrollHandlers.getValue();
+        const topItemSize = this.calcItemSize(maxOffset, base);
         if (scroll >= max) {
-            return index + maxOffset + (scroll - max) / this.calcItemSize(maxOffset, base);
+            return maxOffset + (scroll - max) / topItemSize - index;
         } else if (scroll >= 0) {
             for (let i = 1; i <= maxOffset; ++i) {
                 const gOffset = this.getGridOffset(i, maxOffset);
                 if (gOffset > scroll) {
-                    return index + i - (gOffset - scroll) / this.calcItemSize(i, base);
+                    return i - (gOffset - scroll) / (this.calcItemSize(i, base) + this.calcItemMargin(i, -1)) - index;
                 }
             }
             throw new Error('This is impossible!');
@@ -731,7 +780,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const gridMaxTarget = this.getGridOffset(maxOffset, maxOffset);
         const maxItemSize = this.calcItemSize(maxOffset);
         if (scroll > gridMaxTarget) {
-            return maxOffset + Math.max(Math.min((scroll - gridMaxTarget) / maxItemSize, React.Children.count(this.props.children) - maxOffset - 1), 0);
+            return maxOffset + clamp((scroll - gridMaxTarget) / maxItemSize, 0, React.Children.count(this.props.children) - maxOffset - 1);
         } else {
             for (let i = 1; i <= maxOffset; ++i) {
                 const offset = this.getGridOffset(i, maxOffset);
@@ -756,7 +805,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const gridMaxTarget = this.getGridOffset(maxOffset, maxOffset);
         const maxItemSize = this.calcItemSize(maxOffset);
         if (target >= gridMaxTarget) {
-            return gridMaxTarget + Math.max(Math.min(Math.ceil((target - gridMaxTarget) / maxItemSize), React.Children.count(this.props.children) - maxOffset - 1), 0) * maxItemSize;
+            return gridMaxTarget + clamp(Math.ceil((target - gridMaxTarget) / maxItemSize), 0, React.Children.count(this.props.children) - maxOffset - 1) * maxItemSize;
         } else {
             for (let i = 1; i <= maxOffset; ++i) {
                 const offset = this.getGridOffset(i, maxOffset);
@@ -811,12 +860,12 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     };
 
     private selectLast = (scrollTo: (offset: number) => void) => {
-        const index = this.calcIndex(this.state.selectedValue);
+        const index = this.calcIndex(this.state.value);
         this.selectByIndex(index !== -1 ? index - 1 : 0, scrollTo);
     };
 
     private selectNext = (scrollTo: (offset: number) => void) => {
-        const index = this.calcIndex(this.state.selectedValue);
+        const index = this.calcIndex(this.state.value);
         this.selectByIndex(index !== -1 ? index + 1 : 0, scrollTo);
     };
 
@@ -858,15 +907,15 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         this.setScrollEffect();
     };
 
-    private fireValueChange = (selectedValue: any) => {
-        if (selectedValue !== this.state.selectedValue) {
-            if (!('selectedValue' in this.props)) {
+    private fireValueChange = (value: any) => {
+        if (value !== this.state.value) {
+            if (!('value' in this.props)) {
                 this.setState({
-                    selectedValue,
+                    value,
                 });
             }
-            if (this.props.onValueChange) {
-                this.props.onValueChange(selectedValue);
+            if (this.props.onChange) {
+                this.props.onChange(value);
             }
         }
     };
@@ -878,8 +927,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             const children = React.Children.toArray(this.props.children);
             const index = this.calcCurrentIndexByScroll(top);
             if (this.scrollValue !== index) {
-                // tslint:disable-next-line:no-console
-                console.log(index);
                 this.scrollValue = index;
                 const child: any = children[index];
                 if (child && this.props.onScrollChange) {
@@ -902,29 +949,44 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
 
     // react渲染会有性能问题，故在这里使用传统方法
     private setScrollEffect = (): void => {
-        const { rotate = 25, mode = 'vertical' } = this.props;
-        const { selectedValue } = this.state;
+        const { mode = 'vertical' } = this.props;
+        let { rotate = false } = this.props;
+        const maxOffset = this.calcMaxOffset();
+        if (rotate === true) {
+            rotate = maxOffset && (75 / maxOffset);
+        } else if (typeof rotate !== 'number') {
+            rotate = 0;
+        }
         const angle = (rotate / 180) * Math.PI;
-        const min: number = 0.1;
         const children: any = React.Children.toArray(this.props.children) || [];
         const max: number = children.length;
-        let offset: number = this.calcOffsetByScroll(this.scrollHandlers.getValue());
-        offset = Math.max(offset, min);
-        offset = Math.min(offset, max);
         this.items.forEach((item: any, index: number) => {
             if (!item) {
                 return;
             }
-            const offsetIndex = Math.min(Math.max((offset || selectedValue) - index, -(90 / rotate)), 90 / rotate);
-            const itemSize = this.calcItemSize(this.calcOffset(index));
+            const offset = this.calcOffset(index);
+            const itemSize = this.calcItemSize(offset);
+            const itemMargin = this.calcItemMargin(offset, 0);
             if (mode === 'vertical') {
-                item.style.transform = `translateY(${
-                    itemSize * (offsetIndex - Math.sin(offsetIndex * angle) / angle)
-                }px) rotateX(${-offsetIndex * rotate}deg)`;
+                item.style.margin = `${index === 0 ? 0 : itemMargin}px 0px ${index === max - 1 ? 0 : itemMargin}px 0px`;
+                if (rotate !== 0 && offset !== 0) {
+                    const offsetIndex = clamp(offset, -90 / (rotate as number), 90 / (rotate as number));
+                    item.style.transform = `translateY(${
+                        itemSize * (offsetIndex - Math.sin(offsetIndex * angle) / angle)
+                    }px) rotateX(${-offsetIndex * (rotate as number)}deg)`;
+                } else {
+                    item.style.transform = '';
+                }
             } else {
-                item.style.transform = `translateX(${
-                    itemSize * (offsetIndex - Math.sin(offsetIndex * angle) / angle)
-                }px) rotateY(${-offsetIndex * rotate}deg)`;
+                item.style.margin = `0px ${index === 0 ? 0 : itemMargin}px 0px ${index === max - 1 ? 0 :itemMargin}px`;
+                if (rotate !== 0 && offset !== 0) {
+                    const offsetIndex = clamp(offset, -90 / (rotate as number), 90 / (rotate as number));
+                    item.style.transform = `translateX(${
+                        itemSize * (offsetIndex - Math.sin(offsetIndex * angle) / angle)
+                    }px) rotateY(${-offsetIndex * (rotate as number)}deg)`;
+                } else {
+                    item.style.transform = '';
+                }
             }
         });
     };
