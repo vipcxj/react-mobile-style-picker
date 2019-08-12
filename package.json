@@ -53,6 +53,7 @@
     "react-docgen-typescript-webpack-plugin": "^1.1.0",
     "react-dom": "^16.8.6",
     "rollup": "^1.19.2",
+    "rollup-plugin-copy": "^3.1.0",
     "rollup-plugin-less": "^1.1.2",
     "rollup-plugin-typescript2": "^0.22.1",
     "ts-loader": "^6.0.4",
