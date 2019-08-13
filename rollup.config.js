@@ -1,16 +1,17 @@
+import clear from 'rollup-plugin-clear';
 import copy from 'rollup-plugin-copy'
 import less from 'rollup-plugin-less';
 import typescript from 'rollup-plugin-typescript2'
 import pkg from './package.json'
 export default {
-  input: ['src/index.ts', 'src/index.less'],
+  input: 'src/index.ts',
   output: [
     {
-      dir: 'cjs',
+      file: 'dist/index.js',
       format: 'cjs',
     },
     {
-      dir: 'es',
+      file: 'dist/index.es.js',
       format: 'es',
     },
   ],
@@ -19,19 +20,20 @@ export default {
     ...Object.keys(pkg.devDependencies || {}),
   ],
   plugins: [
+    clear({
+      targets: ['dist'],
+    }),
     typescript({
       typescript: require('typescript'),
       clean: true,
     }),
     less({
-      insert: false,
-      output: ['cjs/index.css', 'es/index.css'],
+      output: 'dist/index.css',
       include: 'src/index.less',
     }),
     copy({
       targets: [
-        { src: 'src/index.less', dest: 'cjs' },
-        { src: 'src/index.less', dest: 'es' },
+        { src: 'src/index.less', dest: 'dist' },
       ],
     }),
   ],

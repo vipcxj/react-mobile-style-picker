@@ -1,7 +1,13 @@
 import classNames from 'classnames';
 import * as React from 'react';
 import ResizeObserver from 'resize-observer-polyfill';
-import { clamp } from './tools';
+import './index.less';
+import { clamp, smooth as defaultSmoothFun } from './tools';
+
+export type ValueGenerator = (offset: number) => number;
+export type ValueGeneratorDecorator = (fun: ValueGenerator) => ValueGenerator;
+
+const emptySmoothFun: ValueGeneratorDecorator = (fun: ValueGenerator) => fun;
 
 export interface IPickerProps {
     disabled?: boolean;
@@ -10,9 +16,9 @@ export interface IPickerProps {
     itemStyle?: any;
     children?: Array<React.ReactElement<IItemProps>>;
     mode?: 'vertical'|'horizontal'
-    itemSize?: number | ((offset: number) => number);
-    itemWeight?: number | ((offset: number) => number);
-    itemMargin?: number | ((offset: number) => number);
+    itemSize?: number | ValueGenerator;
+    itemWeight?: number | ValueGenerator;
+    itemMargin?: number | ValueGenerator;
     size?: number;
     indicatorStyle?: any;
     indicatorClassName?: string;
@@ -22,7 +28,8 @@ export interface IPickerProps {
     onScrollChange?: (value: any) => void;
     noAnimate?: boolean;
     rotate?: boolean | number;
-    mask?: boolean | [number, number];
+    mask?: boolean | number[];
+    smooth?: boolean | ValueGeneratorDecorator;
 }
 
 interface IPickerState {
@@ -344,17 +351,22 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     }
 
     public componentWillReceiveProps(nextProps: IPickerProps) {
-        if ('value' in nextProps) {
-            if (this.state.value !== nextProps.value) {
-                this.setState({
-                    value: nextProps.value,
-                }, () => {
-                    this.select(
-                        nextProps.value,
-                        nextProps.noAnimate ? this.scrollToWithoutAnimation : this.scrollTo,
-                    );
-                });
-            }
+        if (this.props.itemSize !== nextProps.itemSize
+            || this.props.itemWeight !== nextProps.itemWeight
+            || this.props.itemMargin !== nextProps.itemMargin) {
+            this.setState({
+                centerOffset: this.calcCenterOffset().centerOffset,
+            });
+        }
+        if (this.state.value !== nextProps.value) {
+            this.setState({
+                value: nextProps.value,
+            }, () => {
+                this.select(
+                    nextProps.value,
+                    nextProps.noAnimate ? this.scrollToWithoutAnimation : this.scrollTo,
+                );
+            });
         }
         this.scrollHandlers.setDisabled(nextProps.disabled);
     }
@@ -370,6 +382,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     }
 
     public componentDidUpdate() {
+        this.createGridsOffset();
         this.select(this.state.value, this.scrollToWithoutAnimation);
     }
 
@@ -425,9 +438,9 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             };
             const base = this.calcBaseItemSize();
             const maxOffset = this.calcMaxOffset();
-            const offset = this.calcOffset(index, base);
+            const offset = this.calcOffset(index, base, maxOffset);
             const itemSize = this.calcItemSize(offset, base);
-            const margin = (offset <= maxOffset && offset >= -maxOffset) ? this.calcItemMargin(offset, 0) : 0;
+            const margin = this.calcItemMargin(offset, 0);
             let finalStyle: React.CSSProperties;
             if (mode === 'vertical') {
                 finalStyle = {
@@ -446,7 +459,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                     width: itemSize,
                     lineHeight: `${this.state.rootHeight}px`,
                     float: "left",
-                    margin: `0px ${index === 0 ? 0 : margin}px 0px ${index === numChildren - 1 ? 0 : margin}px`,
+                    margin: `0px ${index === numChildren - 1 ? 0 : margin}px 0px ${index === 0 ? 0 : margin}px`,
                 }
             }
             return (
@@ -476,6 +489,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         let pickerStyle: React.CSSProperties;
         let indicatorStyle: React.CSSProperties;
         const indicatorSize = this.calcItemSize(0);
+        const maskStyles = this.calcMaskStyles();
         if (mode === 'vertical') {
             pickerStyle = {
                 ...props.style,
@@ -505,8 +519,8 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         }
         return (
             <div className={classNames(pickerCls)} ref={el => this.rootRef = el} style={pickerStyle}>
-                <div className={`${PREFIX_CLASS}-mask`} ref={el => this.maskRef1 = el} />
-                <div className={`${PREFIX_CLASS}-mask`} ref={el => this.maskRef2 = el} />
+                <div className={`${PREFIX_CLASS}-mask`} style={maskStyles[0]} ref={el => this.maskRef1 = el} />
+                <div className={`${PREFIX_CLASS}-mask`} style={maskStyles[1]} ref={el => this.maskRef2 = el} />
                 <div
                     className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${indicatorClassName}`}
                     ref={el => this.indicatorRef = el}
@@ -530,47 +544,84 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         return children && children[0] && children[0].props.value;
     };
 
-    private layout = (width: number, height: number) => {
-        const { mode = 'vertical', mask = true } = this.props;
-        let centerOffset: number;
+    private calcCenterOffset = (width?: number, height?: number, mode: 'vertical' | 'horizontal' = 'vertical') => {
+        width = width === undefined ? this.state.rootWidth : width;
+        height = height === undefined ? this.state.rootHeight: height;
         const base = this.calcBaseItemSize(width, height);
-        let maskValue: [number, number];
+        const indicatorUpMargin = this.calcItemMargin(0, -1);
+        const indicatorDownMargin = this.calcItemMargin(0, 1);
+        const indicatorSize = this.calcItemSize(0, base) + indicatorUpMargin + indicatorDownMargin;
+        if (mode === 'vertical') {
+            return {
+                indicatorUpMargin,
+                indicatorDownMargin,
+                indicatorSize,
+                centerOffset: (height - indicatorSize) / 2,
+            };
+        } else {
+            return {
+                indicatorUpMargin,
+                indicatorDownMargin,
+                indicatorSize,
+                centerOffset: (width - indicatorSize) / 2,
+            }
+        }
+    };
+
+    private calcMaskStyles = (): [React.CSSProperties, React.CSSProperties] => {
+        const { mode = 'vertical', mask = true } = this.props;
+        let maskValue: number[];
         if (typeof mask === 'boolean') {
             maskValue = mask ? [0.5, 0.9] : [0, 0];
         } else {
             maskValue = mask;
         }
-        const indicatorUpMargin = this.calcItemMargin(0, 1);
-        const indicatorDownMargin = this.calcItemMargin(0, -1);
-        const indicatorSize = this.calcItemSize(0, base) + indicatorUpMargin + indicatorDownMargin;
         if (mode === 'vertical') {
-            centerOffset = (height - indicatorSize) / 2;
+            return [
+                {
+                    backgroundImage: `linear-gradient(to bottom, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`,
+                    backgroundPosition: 'top',
+                    top: 0,
+                    left: 0,
+                },
+                {
+                    backgroundImage: `linear-gradient(to top, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`,
+                    backgroundPosition: 'bottom',
+                }
+            ];
+        } else {
+            return [
+                {
+                    backgroundImage: `linear-gradient(to right, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`,
+                    backgroundPosition: 'left',
+                    top: 0,
+                    left: 0,
+                },
+                {
+                    backgroundImage: `linear-gradient(to left, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`,
+                    backgroundPosition: 'right',
+                },
+            ];
+        }
+    };
+
+    private layout = (width: number, height: number) => {
+        const { mode = 'vertical' } = this.props;
+        const { centerOffset, indicatorSize, indicatorUpMargin } = this.calcCenterOffset(width, height, mode);
+        if (mode === 'vertical') {
             this.contentRef.style.top = `${centerOffset + indicatorUpMargin}px`;
             this.indicatorRef.style.top = `${centerOffset + indicatorUpMargin}px`;
-            this.maskRef1.style.backgroundImage = `linear-gradient(to bottom, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
-            this.maskRef1.style.backgroundPosition = 'top';
-            this.maskRef1.style.top = '0px';
-            this.maskRef1.style.left = '0px';
             this.maskRef1.style.width = '100%';
             this.maskRef1.style.height = `${centerOffset}px`;
-            this.maskRef2.style.backgroundImage = `linear-gradient(to top, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
-            this.maskRef2.style.backgroundPosition = 'bottom';
             this.maskRef2.style.top = `${centerOffset + indicatorSize}px`;
-            this.maskRef1.style.left = '0px';
+            this.maskRef2.style.left = '0px';
             this.maskRef2.style.width = '100%';
             this.maskRef2.style.height = `${centerOffset}px`;
         } else {
-            centerOffset = (width - indicatorSize) / 2;
             this.contentRef.style.left = `${centerOffset + indicatorUpMargin}px`;
             this.indicatorRef.style.left = `${centerOffset + indicatorUpMargin}px`;
-            this.maskRef1.style.backgroundImage = `linear-gradient(to right, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
-            this.maskRef1.style.backgroundPosition = 'left';
-            this.maskRef1.style.top = '0px';
-            this.maskRef1.style.left = '0px';
             this.maskRef1.style.height = '100%';
             this.maskRef1.style.width = `${centerOffset}px`;
-            this.maskRef2.style.backgroundImage = `linear-gradient(to left, rgba(255, 255, 255, ${maskValue[1]}), rgba(255, 255, 255, ${maskValue[0]}))`;
-            this.maskRef2.style.backgroundPosition = 'right';
             this.maskRef2.style.top = '0px';
             this.maskRef2.style.left = `${centerOffset + indicatorSize}px`;
             this.maskRef2.style.height = '100%';
@@ -620,17 +671,24 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const { mode = 'vertical' } = this.props;
         for (let i = -maxOffset; i <= maxOffset; ++i) {
             const size = this.calcItemSize(i);
-            const margin = this.calcItemMargin(i, 0);
+            const margin = this.calcItemMargin(i, 1);
             const style = {
                 flexGrow: size,
                 flexShrink: size,
-                margin: mode === 'vertical'
-                    ? `${i === maxOffset ? 0 : margin}px 0px ${i === -maxOffset ? 0 : margin}px 0px`
-                    : `0px ${i === maxOffset ? 0 : margin}px 0px ${i === -maxOffset ? 0 : margin}px`,
             };
             nodes.push(
                 <div key={i} className="m-style-picker-grid" style={style} ref={this.getGridRef(i, maxOffset)} />
             );
+            if (i !== maxOffset) {
+                const marginStyle: React.CSSProperties = {
+                    flexGrow: 0,
+                    flexShrink: 0,
+                    flexBasis: margin,
+                };
+                nodes.push(
+                    <div key={`m-${i < 0 ? 'n' + i : i}-${i + 1 < 0 ? 'n' + (i + 1) : i + 1}`} style={marginStyle} />
+                );
+            }
         }
         return nodes;
     };
@@ -646,32 +704,45 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         return size;
     };
 
+    private resolveDecoratorFun = (): ValueGeneratorDecorator => {
+        const { smooth = true } = this.props;
+        if (typeof smooth === 'boolean') {
+            return smooth ? defaultSmoothFun : emptySmoothFun;
+        } else {
+            return smooth;
+        }
+    };
+
     private calcItemWeight = (offset: number, maxOffset?: number): number => {
         if (maxOffset === undefined) { maxOffset = this.calcMaxOffset(); }
         const { itemSize, itemWeight = 1 } = this.props;
         if (typeof itemSize === 'number') {
             return itemSize;
         } else if (typeof itemSize === 'function') {
+            const decorator = this.resolveDecoratorFun();
+            const itemSizeFun = decorator(itemSize);
             if (offset > maxOffset) {
-                return itemSize(maxOffset);
+                return itemSizeFun(maxOffset);
             } else if (offset > -maxOffset) {
                 const ceil = Math.ceil(offset);
                 const floor = Math.floor(offset);
-                return ceil === floor ? itemSize(offset) : (itemSize(floor) * (1 - offset + floor) + itemSize(ceil) * (offset - floor));
+                return ceil === floor ? itemSizeFun(offset) : (itemSizeFun(floor) * (1 - offset + floor) + itemSizeFun(ceil) * (offset - floor));
             } else {
-                return itemSize(-maxOffset);
+                return itemSizeFun(-maxOffset);
             }
         } else if (typeof itemWeight === 'number') {
             return itemWeight;
         } else if (typeof itemWeight === 'function') {
+            const decorator = this.resolveDecoratorFun();
+            const itemWeightFun = decorator(itemWeight);
             if (offset > maxOffset) {
-                return itemWeight(maxOffset);
+                return itemWeightFun(maxOffset);
             } else if (offset > -maxOffset) {
                 const ceil = Math.ceil(offset);
                 const floor = Math.floor(offset);
-                return ceil === floor ? itemWeight(offset) : (itemWeight(floor) * (1 - offset + floor) + itemWeight(ceil) * (offset - floor));
+                return ceil === floor ? itemWeightFun(offset) : (itemWeightFun(floor) * (1 - offset + floor) + itemWeightFun(ceil) * (offset - floor));
             } else {
-                return itemWeight(-maxOffset);
+                return itemWeightFun(-maxOffset);
             }
         } else {
             return 1;
@@ -708,19 +779,29 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     };
 
     private calcItemMargin = (offset: number, dir: -1|0|1): number => {
-        const {itemMargin = 0 } = this.props;
+        const { itemMargin = 0 } = this.props;
+        const maxOffset = this.calcMaxOffset();
+        if (offset <= -maxOffset - 1 || offset >= maxOffset + 1) {
+            return 0;
+        } else if (offset <= -maxOffset && dir < 0) {
+            return 0;
+        } else if (offset >= maxOffset && dir > 0) {
+            return 0;
+        }
         if (typeof itemMargin === 'number') {
             return itemMargin;
         } else {
-            const margin = itemMargin(offset);
+            const decorator = this.resolveDecoratorFun();
+            const marginFun = decorator(itemMargin);
+            const margin = marginFun(offset);
             if (dir === 0) {
                 return margin;
             }
             let adjMargin;
             if (dir < 0) {
-                adjMargin = itemMargin(offset - 1);
+                adjMargin = marginFun(offset - 1);
             } else {
-                adjMargin = itemMargin(offset + 1);
+                adjMargin = marginFun(offset + 1);
             }
             if (margin >= 0 && adjMargin >= 0) {
                 return Math.max(margin, adjMargin);
@@ -748,7 +829,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             for (let i = 1; i <= maxOffset; ++i) {
                 const gOffset = this.getGridOffset(i, maxOffset);
                 if (gOffset > scroll) {
-                    return i - (gOffset - scroll) / (this.calcItemSize(i, base) + this.calcItemMargin(i, -1)) - index;
+                    return i - (gOffset - scroll) / (this.calcItemSize(i, base) + this.calcItemMargin(i, 1)) - index;
                 }
             }
             throw new Error('This is impossible!');
@@ -760,12 +841,12 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     private calcScroll = (offset: number, base?: number, maxOffset?: number): number => {
         base = base === undefined ? this.calcBaseItemSize() : base;
         maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
-        const upBoundScroll = this.getGridOffset(maxOffset, maxOffset);
-        const bottomBoundScroll = this.getGridOffset(-maxOffset, maxOffset);
+        const bottomBoundScroll = this.getGridOffset(maxOffset, maxOffset);
+        const upBoundScroll = this.getGridOffset(-maxOffset, maxOffset);
         if (offset > maxOffset) {
-            return upBoundScroll + this.calcItemMargin(maxOffset, 1) + (offset - maxOffset) * this.calcItemSize(maxOffset, base);
+            return bottomBoundScroll + (maxOffset - offset) * this.calcItemSize(maxOffset, base);
         } else if (offset < -maxOffset) {
-            return bottomBoundScroll - this.calcItemMargin(-maxOffset, -1) + (maxOffset + offset) * this.calcItemSize(maxOffset, base);
+            return upBoundScroll - (maxOffset + offset) * this.calcItemSize(-maxOffset, base);
         } else {
             return this.getGridOffset(offset, maxOffset);
         }
@@ -826,7 +907,8 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             if (typeof itemSize === 'number') {
                 size = itemSize;
             } else {
-                size = itemSize(i);
+                const decorator = this.resolveDecoratorFun();
+                size = decorator(itemSize)(i);
             }
             cSize += size;
             if (i !== offset) {
@@ -978,7 +1060,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                     item.style.transform = '';
                 }
             } else {
-                item.style.margin = `0px ${index === 0 ? 0 : itemMargin}px 0px ${index === max - 1 ? 0 :itemMargin}px`;
+                item.style.margin = `0px ${index === max - 1 ? 0 : itemMargin}px 0px ${index === 0 ? 0 :itemMargin}px`;
                 if (rotate !== 0 && offset !== 0) {
                     const offsetIndex = clamp(offset, -90 / (rotate as number), 90 / (rotate as number));
                     item.style.transform = `translateX(${
