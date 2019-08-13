@@ -438,7 +438,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             };
             const base = this.calcBaseItemSize();
             const maxOffset = this.calcMaxOffset();
-            const offset = this.calcOffset(index, base, maxOffset);
+            const offset = this.calcOffset(index, this.scrollHandlers.getValue(), base, maxOffset);
             const itemSize = this.calcItemSize(offset, base);
             const margin = this.calcItemMargin(offset, 0);
             let finalStyle: React.CSSProperties;
@@ -668,7 +668,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     private createGrids = () => {
         const maxOffset = this.calcMaxOffset();
         const nodes: React.ReactNode[] = [];
-        const { mode = 'vertical' } = this.props;
         for (let i = -maxOffset; i <= maxOffset; ++i) {
             const size = this.calcItemSize(i);
             const margin = this.calcItemMargin(i, 1);
@@ -817,19 +816,19 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         return (this.normedSize() - 1) / 2;
     };
 
-    private calcOffset = (index: number, base?: number, maxOffset?: number): number => {
+    private calcOffset = (index: number, scroll?: number, base?: number, maxOffset?: number): number => {
         base = base === undefined ? this.calcBaseItemSize() : base;
         maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
-        const max = this.getGridOffset(maxOffset, maxOffset);
-        const scroll = this.scrollHandlers.getValue();
-        const topItemSize = this.calcItemSize(maxOffset, base);
+        scroll = scroll === undefined ? this.scrollHandlers.getValue() : scroll;
+        const max = -this.getGridOffset(-maxOffset, maxOffset);
+        const topItemSize = this.calcItemSize(-maxOffset, base);
         if (scroll >= max) {
-            return maxOffset + (scroll - max) / topItemSize - index;
+            return index - maxOffset - clamp((scroll - max) / topItemSize, 0, React.Children.count(this.props.children) - maxOffset - 1);
         } else if (scroll >= 0) {
-            for (let i = 1; i <= maxOffset; ++i) {
-                const gOffset = this.getGridOffset(i, maxOffset);
-                if (gOffset > scroll) {
-                    return i - (gOffset - scroll) / (this.calcItemSize(i, base) + this.calcItemMargin(i, 1)) - index;
+            for (let i = -1; i >= -maxOffset; --i) {
+                const offset = -this.getGridOffset(i, maxOffset);
+                if (offset > scroll) {
+                    return index + i + (offset - scroll) / (this.calcItemSize(i, base) + this.calcItemMargin(i, 1));
                 }
             }
             throw new Error('This is impossible!');
@@ -848,33 +847,12 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         } else if (offset < -maxOffset) {
             return upBoundScroll - (maxOffset + offset) * this.calcItemSize(-maxOffset, base);
         } else {
-            return this.getGridOffset(offset, maxOffset);
+            return -this.getGridOffset(offset, maxOffset);
         }
     };
 
-    private calcOffsetByScroll = (scroll: number, maxOffset?: number,  base?: number): number => {
-        if (scroll <= 0) {
-            return 0;
-        }
-        base = base === undefined ? this.calcBaseItemSize() : base;
-        maxOffset = maxOffset === undefined ? this.calcMaxOffset() : maxOffset;
-        const gridMaxTarget = this.getGridOffset(maxOffset, maxOffset);
-        const maxItemSize = this.calcItemSize(maxOffset);
-        if (scroll > gridMaxTarget) {
-            return maxOffset + clamp((scroll - gridMaxTarget) / maxItemSize, 0, React.Children.count(this.props.children) - maxOffset - 1);
-        } else {
-            for (let i = 1; i <= maxOffset; ++i) {
-                const offset = this.getGridOffset(i, maxOffset);
-                if (offset >= scroll) {
-                    return i - (offset - scroll) / this.calcItemSize(i, base);
-                }
-            }
-            return 0;
-        }
-    };
-
-    private calcCurrentIndexByScroll = (scroll: number, maxOffset?: number): number => {
-        const offset = this.calcOffsetByScroll(scroll, maxOffset);
+    private calcCurrentIndexByScroll = (scroll: number, base?: number, maxOffset?: number): number => {
+        const offset = this.calcOffset(0, scroll, base, maxOffset);
         return Math.max(Math.round(offset), 0);
     };
 
