@@ -1075,7 +1075,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         let { rotate = false } = this.props;
         const maxOffset = this.calcMaxOffset();
         if (rotate === true) {
-            rotate = maxOffset && (75 / maxOffset);
+            rotate = maxOffset && (90 / (maxOffset + 1));
         } else if (typeof rotate !== 'number') {
             rotate = 0;
         }
