@@ -104,7 +104,7 @@ const itemMarginOptions: { [x: string]: any; } = {
     [itemMarginKeys[2]]: itemMarginFun1,
     [itemMarginKeys[3]]: itemMarginFun2,
 };
-const rotateKeys = ['undefined (default true)', 'true', 'false', '10 degree', '20 degree', '30 degree'];
+const rotateKeys = ['undefined (default false)', 'true', 'false', '10 degree', '20 degree', '30 degree'];
 const rotateOptions: { [x: string]: boolean | number; } = {
     [rotateKeys[0]]: undefined,
     [rotateKeys[1]]: true,
