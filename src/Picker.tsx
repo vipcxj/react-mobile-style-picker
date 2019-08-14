@@ -2,6 +2,7 @@ import classNames from 'classnames';
 import * as React from 'react';
 import ResizeObserver from 'resize-observer-polyfill';
 import './index.less';
+import Loading from './Loading';
 import { clamp, smooth as defaultSmoothFun } from './tools';
 
 export type ValueGenerator = (offset: number, maxOffset: number) => number;
@@ -33,6 +34,8 @@ export interface IPickerProps {
     dragSelect?: boolean;
     clickSelect?: boolean;
     scrollSelect?: boolean;
+    loading?: boolean;
+    loadingComponent?: () => React.ReactNode;
 }
 
 interface IPickerState {
@@ -196,7 +199,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         };
 
         const onStart = (y: number) => {
-            if (scrollDisabled || !this.supportDragSelect()) {
+            if (scrollDisabled || !this.supportDragSelect() || this.props.loading) {
                 return;
             }
 
@@ -226,7 +229,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         let supportsWheel = false;
 
         const onWheel = (evt: WheelEvent) => {
-            if (!this.supportScrollSelect()) {
+            if (!this.supportScrollSelect() || this.props.loading) {
                 return false;
             }
             if (evt.type === 'wheel') {
@@ -395,116 +398,13 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const { props } = this;
         const {
             mode = 'vertical',
-            itemStyle,
             indicatorClassName = '',
             children,
+            loading = false,
+            loadingComponent = Loading(),
         } = props;
-        const itemClassName = `${PREFIX_CLASS}-item`;
-        const itemModeClassName = `${itemClassName}-${mode}`;
-        const selectedItemClassName = `${itemClassName} ${PREFIX_CLASS}-item-selected`;
-        const itemMarginClassName = `${PREFIX_CLASS}-item-margin`;
-        const itemMarginModeClassName = `${itemMarginClassName}-${mode}`;
-        const numChildren = React.Children.count(children);
-        const map = (item: React.ReactElement<IItemProps>, index: number) => {
-            const { className = '', style, value, onClick, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, ...rest } = item.props;
-            let startX: number;
-            let startY: number;
-            let dist: number = -1;
-            const onMStart = (evt: React.MouseEvent<HTMLDivElement>) => {
-                startX = evt.clientX;
-                startY = evt.clientY;
-                if (onMouseDown) {
-                    onMouseDown(evt);
-                }
-            };
-            const onMFinish = (evt: React.MouseEvent<HTMLDivElement>) => {
-                dist = (evt.clientX - startX) * (evt.clientX - startX) + (evt.clientY - startY) * (evt.clientY - startY);
-                if (onMouseUp) {
-                    onMouseUp(evt);
-                }
-            };
-            const onTStart = (evt: React.TouchEvent<HTMLDivElement>) => {
-                startX = evt.touches[0].clientX;
-                startY = evt.touches[0].clientY;
-                if (onTouchStart) {
-                    onTouchStart(evt);
-                }
-            };
-            const onTFinish = (evt: React.TouchEvent<HTMLDivElement>) => {
-                dist = (evt.touches[0].clientX - startX) * (evt.touches[0].clientX - startX) + (evt.touches[0].clientY - startY) * (evt.touches[0].clientY - startY);
-                if (onTouchEnd) {
-                    onTouchEnd(evt);
-                }
-            };
-            const onClickHandler = (evt: React.MouseEvent<HTMLDivElement>) => {
-                if (dist < CLICK_SELECT_MAX_OFFSET && onClick) {
-                    onClick(evt);
-                }
-                if (dist < CLICK_SELECT_MAX_OFFSET && !evt.isDefaultPrevented() && this.supportClickSelect()) {
-                    this.clickToScroll(value);
-                }
-            };
-            const base = this.calcBaseItemSize();
-            const maxOffset = this.calcMaxOffset();
-            const offset = this.calcOffset(index, this.scrollHandlers.getValue(), base, maxOffset);
-            const itemSize = this.calcItemSize(offset, base);
-            const margin = this.calcItemMargin(offset, 1);
-            let finalStyle: React.CSSProperties;
-            let marginStyle: React.CSSProperties;
-            if (mode === 'vertical') {
-                finalStyle = {
-                    ...itemStyle,
-                    ...style,
-                    flexBasis: itemSize,
-                    height: itemSize,
-                    lineHeight: `${itemSize}px`,
-                    margin: 0,
-                };
-                marginStyle = {
-                    flexBasis: margin,
-                    height: margin,
-                };
-            } else {
-                finalStyle = {
-                    ...itemStyle,
-                    ...style,
-                    flexBasis: itemSize,
-                    width: itemSize,
-                    lineHeight: `${this.state.rootHeight}px`,
-                    margin: 0,
-                };
-                marginStyle = {
-                    flexBasis: margin,
-                    width: margin,
-                };
-            }
-            return (
-                <React.Fragment key={value}>
-                    <div
-                        style={finalStyle}
-                        className={`${value === this.state.value ? selectedItemClassName : itemClassName} ${itemModeClassName} ${className}`}
-                        ref={ref => this.items[index] = ref}
-                        onMouseDown={onMStart}
-                        onMouseUp={onMFinish}
-                        onTouchStart={onTStart}
-                        onTouchEnd={onTFinish}
-                        onClick={onClickHandler}
-                        {...rest}
-                    >
-                        { item.props.children || null }
-                    </div>
-                    { index !== numChildren - 1 ? (
-                        <div
-                            className={`${itemMarginClassName} ${itemMarginModeClassName}`}
-                            style={marginStyle}
-                            ref={ref => this.itemsMargin[index] = ref}
-                        />
-                    ) : null }
-                </React.Fragment>
-            );
-        };
         // compatibility for preact
-        const items = React.Children ? React.Children.map(children, map) : ([] as any[]).concat(children).map(map);
+        const items = React.Children ? React.Children.map(children, this.mapChildren) : ([] as any[]).concat(children).map(this.mapChildren);
         const pickerCls = {
             [props.className as string]: !!props.className,
             [PREFIX_CLASS as string]: true,
@@ -541,31 +441,142 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                 top: 0,
             }
         }
-        return (
-            <div className={classNames(pickerCls)} ref={this.bindRootRef} style={pickerStyle}>
-                <div className={`${PREFIX_CLASS}-mask`} style={maskStyles[0]} ref={el => this.maskRef1 = el} />
-                <div className={`${PREFIX_CLASS}-mask`} style={maskStyles[1]} ref={el => this.maskRef2 = el} />
-                <div
-                    className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${indicatorClassName}`}
-                    ref={el => this.indicatorRef = el}
-                    style={indicatorStyle}
-                />
-                <div className={`${PREFIX_CLASS}-content ${PREFIX_CLASS}-content-${mode}`} ref={el => this.contentRef = el}>
-                    {items}
+        if (loading) {
+            return (
+                <div className={classNames(pickerCls)} ref={this.bindRootRef} style={pickerStyle}>
+                    { loadingComponent() || null }
                 </div>
-                <div className={`${PREFIX_CLASS}-grids-${mode}`}>
-                    { this.createGrids() }
+            );
+        } else {
+            return (
+                <div className={classNames(pickerCls)} ref={this.bindRootRef} style={pickerStyle}>
+                    <div key="mask1" className={`${PREFIX_CLASS}-mask`} style={maskStyles[0]} ref={el => this.maskRef1 = el} />
+                    <div key="mask2" className={`${PREFIX_CLASS}-mask`} style={maskStyles[1]} ref={el => this.maskRef2 = el} />
+                    <div
+                        key="indicator"
+                        className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${indicatorClassName}`}
+                        ref={el => this.indicatorRef = el}
+                        style={indicatorStyle}
+                    />
+                    <div key="content" className={`${PREFIX_CLASS}-content ${PREFIX_CLASS}-content-${mode}`} ref={el => this.contentRef = el}>
+                        {items}
+                    </div>
+                    <div key="grids" className={`${PREFIX_CLASS}-grids-${mode}`}>
+                        { this.createGrids() }
+                    </div>
                 </div>
-            </div>
-        );
+            );
+        }
     }
 
-    public getValue = () => {
-        if ('value' in this.props) {
-            return this.props.value;
+    private mapChildren = (item: React.ReactElement<IItemProps>, index: number) => {
+        const {
+            mode = 'vertical',
+            itemStyle,
+            children,
+        } = this.props;
+        const itemClassName = `${PREFIX_CLASS}-item`;
+        const itemModeClassName = `${itemClassName}-${mode}`;
+        const selectedItemClassName = `${itemClassName} ${PREFIX_CLASS}-item-selected`;
+        const itemMarginClassName = `${PREFIX_CLASS}-item-margin`;
+        const itemMarginModeClassName = `${itemMarginClassName}-${mode}`;
+        const numChildren = React.Children.count(children);
+        const { className = '', style, value, onClick, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, ...rest } = item.props;
+        let startX: number;
+        let startY: number;
+        let dist: number = -1;
+        const onMStart = (evt: React.MouseEvent<HTMLDivElement>) => {
+            startX = evt.clientX;
+            startY = evt.clientY;
+            if (onMouseDown) {
+                onMouseDown(evt);
+            }
+        };
+        const onMFinish = (evt: React.MouseEvent<HTMLDivElement>) => {
+            dist = (evt.clientX - startX) * (evt.clientX - startX) + (evt.clientY - startY) * (evt.clientY - startY);
+            if (onMouseUp) {
+                onMouseUp(evt);
+            }
+        };
+        const onTStart = (evt: React.TouchEvent<HTMLDivElement>) => {
+            startX = evt.touches[0].clientX;
+            startY = evt.touches[0].clientY;
+            if (onTouchStart) {
+                onTouchStart(evt);
+            }
+        };
+        const onTFinish = (evt: React.TouchEvent<HTMLDivElement>) => {
+            dist = (evt.touches[0].clientX - startX) * (evt.touches[0].clientX - startX) + (evt.touches[0].clientY - startY) * (evt.touches[0].clientY - startY);
+            if (onTouchEnd) {
+                onTouchEnd(evt);
+            }
+        };
+        const onClickHandler = (evt: React.MouseEvent<HTMLDivElement>) => {
+            if (dist < CLICK_SELECT_MAX_OFFSET && onClick) {
+                onClick(evt);
+            }
+            if (dist < CLICK_SELECT_MAX_OFFSET && !evt.isDefaultPrevented() && this.supportClickSelect()) {
+                this.clickToScroll(value);
+            }
+        };
+        const base = this.calcBaseItemSize();
+        const maxOffset = this.calcMaxOffset();
+        const offset = this.calcOffset(index, this.scrollHandlers.getValue(), base, maxOffset);
+        const itemSize = this.calcItemSize(offset, base);
+        const margin = this.calcItemMargin(offset, 1);
+        let finalStyle: React.CSSProperties;
+        let marginStyle: React.CSSProperties;
+        if (mode === 'vertical') {
+            finalStyle = {
+                ...itemStyle,
+                ...style,
+                flexBasis: itemSize,
+                height: itemSize,
+                lineHeight: `${itemSize}px`,
+                margin: 0,
+            };
+            marginStyle = {
+                flexBasis: margin,
+                height: margin,
+            };
+        } else {
+            finalStyle = {
+                ...itemStyle,
+                ...style,
+                flexBasis: itemSize,
+                width: itemSize,
+                lineHeight: `${this.state.rootHeight}px`,
+                margin: 0,
+            };
+            marginStyle = {
+                flexBasis: margin,
+                width: margin,
+            };
         }
-        const children: any = React.Children.toArray(this.props.children);
-        return children && children[0] && children[0].props.value;
+        return (
+            <React.Fragment key={value}>
+                <div
+                    style={finalStyle}
+                    className={`${value === this.state.value ? selectedItemClassName : itemClassName} ${itemModeClassName} ${className}`}
+                    ref={ref => this.items[index] = ref}
+                    onMouseDown={onMStart}
+                    onMouseUp={onMFinish}
+                    onTouchStart={onTStart}
+                    onTouchEnd={onTFinish}
+                    onClick={onClickHandler}
+                    {...rest}
+                >
+                    { item.props.children || null }
+                </div>
+                { index !== numChildren - 1 ? (
+                    <div
+                        className={`${itemMarginClassName} ${itemMarginModeClassName}`}
+                        style={marginStyle}
+                        ref={ref => this.itemsMargin[index] = ref}
+                    />
+                ) : null }
+            </React.Fragment>
+        );
     };
 
     private bindRootRef = (ref: HTMLDivElement) => {
@@ -762,7 +773,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     private supportScrollSelect = (): boolean => {
         const { scrollSelect = true } = this.props;
         return scrollSelect;
-    }
+    };
 
     private normedSize = (): number => {
         let { size = 7 } = this.props;

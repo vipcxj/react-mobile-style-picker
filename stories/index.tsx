@@ -4,19 +4,6 @@ import * as React from 'react';
 import { Picker } from '../src/index';
 import './index.css';
 
-// tslint:disable-next-line:no-console
-const onClick0 = () => console.log('onClick on Picker.Item');
-const onClick1 = (evt: React.MouseEvent<HTMLButtonElement>) => {
-    evt.stopPropagation();
-    // tslint:disable-next-line:no-console
-    console.log('Because \'stopPropagation\' is called, so the \'onClick\' on Picker.Item will not be called.');
-};
-const onClick2 = (evt: React.MouseEvent<HTMLButtonElement>) => {
-    evt.preventDefault();
-    // tslint:disable-next-line:no-console
-    console.log('Because \'preventDefault\' is called, so the default behavior (auto selected) will not happen.');
-};
-
 export const stories = storiesOf('Picker', module);
 const itemMarginFun1 = (offset: number): number => {
     if (offset === 0) {
@@ -36,7 +23,6 @@ const itemMarginFun2 = (offset: number): number => {
         return 18;
     }
 };
-const test = itemMarginFun1(1);
 const itemSizeFun1 = (offset: number): number => {
     if (offset === 0) {
         return 36;
@@ -141,6 +127,7 @@ stories.add(
         const dragSelect = boolean('drag to select', true);
         const clickSelect = boolean('click to select', true);
         const scrollSelect = boolean('scroll to select', true);
+        const loading = boolean('loading', false);
         return (
             <Picker
                 size={size}
@@ -154,6 +141,7 @@ stories.add(
                 dragSelect={dragSelect}
                 clickSelect={clickSelect}
                 scrollSelect={scrollSelect}
+                loading={loading}
             >
                 <Picker.Item value={0} style={{ backgroundColor: color && 'rgba(0, 255, 255)' }}>zero</Picker.Item>
                 <Picker.Item value={1} style={{ backgroundColor: color && 'rgba(255, 0, 255)' }}>one</Picker.Item>
@@ -204,6 +192,6 @@ stories.add(
             </Picker>
         )
     }
-)
+);
 
 export default stories;
