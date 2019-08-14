@@ -1,11 +1,11 @@
-export const smooth = (fun: (offset: number) => number): (offset: number) => number =>
-    (offset: number): number => {
+export const smooth = (fun: (offset: number, maxOffset: number) => number): (offset: number, maxOffset: number) => number =>
+    (offset: number, maxOffset: number): number => {
         const floor = Math.floor(offset);
         const ceil = Math.ceil(offset);
         if (floor === ceil) {
-            return fun(offset);
+            return fun(offset, maxOffset);
         } else {
-            return fun(floor) * (1 - offset + floor) + fun(ceil) * (offset - floor);
+            return fun(floor, maxOffset) * (1 - offset + floor) + fun(ceil, maxOffset) * (offset - floor);
         }
     };
 
