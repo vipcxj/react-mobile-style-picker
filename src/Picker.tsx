@@ -10,19 +10,22 @@ export type ValueGeneratorDecorator = (fun: ValueGenerator) => ValueGenerator;
 
 const emptySmoothFun: ValueGeneratorDecorator = (fun: ValueGenerator) => fun;
 
+export type Mode = 'vertical'|'horizontal';
+
 export interface IPickerProps {
     disabled?: boolean;
     value?: any;
     onChange?: (value: any) => void;
-    itemStyle?: any;
+    itemStyle?: React.CSSProperties;
     children?: Array<React.ReactElement<IItemProps>>;
-    mode?: 'vertical'|'horizontal'
+    mode?: Mode;
     itemSize?: number | ValueGenerator;
     itemWeight?: number | ValueGenerator;
     itemMargin?: number | ValueGenerator;
     size?: number;
-    indicatorStyle?: any;
+    indicatorStyle?: React.CSSProperties;
     indicatorClassName?: string;
+    indicatorComponent?: (key: string, size: number, marginStart: number, marginEnd: number, mode: Mode, className?: string, style?: React.CSSProperties) => React.ReactNode;
     className?: string;
     defaultValue?: any;
     style?: React.CSSProperties;
@@ -46,6 +49,7 @@ interface IPickerState {
 
 export interface IItemProps extends React.HTMLAttributes<HTMLDivElement> {
     value: any;
+    nodeRef?: ((ref: HTMLDivElement) => void) | { current?: null | HTMLDivElement };
     className?: string;
     style?: React.CSSProperties;
 }
@@ -132,7 +136,31 @@ const setTransition = (nodeStyle: CSSStyleDeclaration, value: string) => {
     nodeStyle.webkitTransition = value;
 };
 
-export default class Picker extends React.Component<IPickerProps, IPickerState> {
+const createDefaultIndicator = (key: string, size: number, marginStart: number, marginEnd: number, mode: Mode, className?: string, style?: React.CSSProperties): React.ReactNode => {
+    let finalStyle: React.CSSProperties;
+    if (mode === 'vertical') {
+        finalStyle = {
+            ...style,
+            width: '100%',
+            height: size + marginStart + marginEnd,
+        }
+    } else {
+        finalStyle = {
+            ...style,
+            height: '100%',
+            width: size + marginStart + marginEnd,
+        }
+    }
+    return (
+        <div
+            key={key}
+            className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${className || ''}`}
+            style={finalStyle}
+        />
+    )
+};
+
+export default class Picker extends React.PureComponent<IPickerProps, IPickerState> {
 
     public static readonly Item = Item;
 
@@ -292,7 +320,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
     })();
 
     private contentRef: HTMLDivElement;
-    private indicatorRef: HTMLDivElement;
     private maskRef1: HTMLDivElement;
     private maskRef2: HTMLDivElement;
     private rootRef: HTMLDivElement;
@@ -378,18 +405,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         this.scrollHandlers.setDisabled(nextProps.disabled);
     }
 
-    public shouldComponentUpdate(nextProps: Readonly<IPickerProps>, nextState: Readonly<IPickerState>) {
-        return this.state.value !== nextState.value
-            || this.state.rootWidth !== nextState.rootWidth
-            || this.state.rootHeight !== nextState.rootHeight
-            || this.props.size !== nextProps.size
-            || this.props.mode !== nextProps.mode
-            || this.props.itemSize !== nextProps.itemSize
-            || this.props.itemWeight !== nextProps.itemWeight
-            || this.props.itemMargin !== nextProps.itemMargin
-            || this.props.children !== nextProps.children;
-    }
-
     public componentDidUpdate() {
         this.select(this.state.value, this.scrollToWithoutAnimation);
     }
@@ -398,7 +413,9 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const { props } = this;
         const {
             mode = 'vertical',
-            indicatorClassName = '',
+            indicatorClassName,
+            indicatorStyle,
+            indicatorComponent = createDefaultIndicator,
             children,
             loading = false,
             loadingComponent = Loading(),
@@ -411,8 +428,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         };
 
         let pickerStyle: React.CSSProperties;
-        let indicatorStyle: React.CSSProperties;
-        const indicatorSize = this.calcItemSize(0);
         const maskStyles = this.calcMaskStyles();
         if (mode === 'vertical') {
             pickerStyle = {
@@ -421,24 +436,12 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
             if (!pickerStyle.height) {
                 pickerStyle.height = this.calcContainerSizeByProps();
             }
-            indicatorStyle = {
-                ...props.indicatorStyle,
-                width: '100%',
-                height: indicatorSize,
-                left: 0,
-            }
         } else {
             pickerStyle = {
                 ...props.style,
             };
             if (!pickerStyle.width && this.props.itemSize) {
                 pickerStyle.width = this.calcContainerSizeByProps();
-            }
-            indicatorStyle = {
-                ...props.indicatorStyle,
-                width: indicatorSize,
-                height: '100%',
-                top: 0,
             }
         }
         if (loading) {
@@ -452,12 +455,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                 <div className={classNames(pickerCls)} ref={this.bindRootRef} style={pickerStyle}>
                     <div key="mask1" className={`${PREFIX_CLASS}-mask`} style={maskStyles[0]} ref={el => this.maskRef1 = el} />
                     <div key="mask2" className={`${PREFIX_CLASS}-mask`} style={maskStyles[1]} ref={el => this.maskRef2 = el} />
-                    <div
-                        key="indicator"
-                        className={`${PREFIX_CLASS}-indicator ${PREFIX_CLASS}-indicator-${mode} ${indicatorClassName}`}
-                        ref={el => this.indicatorRef = el}
-                        style={indicatorStyle}
-                    />
+                    { indicatorComponent('indicator', this.calcItemSize(0), this.calcItemMargin(0, -1), this.calcItemMargin(0, 1), mode, indicatorClassName, indicatorStyle) }
                     <div key="content" className={`${PREFIX_CLASS}-content ${PREFIX_CLASS}-content-${mode}`} ref={el => this.contentRef = el}>
                         {items}
                     </div>
@@ -481,7 +479,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const itemMarginClassName = `${PREFIX_CLASS}-item-margin`;
         const itemMarginModeClassName = `${itemMarginClassName}-${mode}`;
         const numChildren = React.Children.count(children);
-        const { className = '', style, value, onClick, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, ...rest } = item.props;
+        const { className = '', style, value, nodeRef, onClick, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, ...rest } = item.props;
         let startX: number;
         let startY: number;
         let dist: number = -1;
@@ -553,12 +551,20 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
                 width: margin,
             };
         }
+        const bindRef = (ref: HTMLDivElement) => {
+            this.items[index] = ref;
+            if (typeof nodeRef === 'function') {
+                nodeRef(ref);
+            } else if (typeof nodeRef === 'object') {
+                nodeRef.current = ref;
+            }
+        };
         return (
             <React.Fragment key={value}>
                 <div
                     style={finalStyle}
                     className={`${value === this.state.value ? selectedItemClassName : itemClassName} ${itemModeClassName} ${className}`}
-                    ref={ref => this.items[index] = ref}
+                    ref={bindRef}
                     onMouseDown={onMStart}
                     onMouseUp={onMFinish}
                     onTouchStart={onTStart}
@@ -619,7 +625,7 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         const { mode = 'vertical', mask = true } = this.props;
         let maskValue: number[];
         if (typeof mask === 'boolean') {
-            maskValue = mask ? [0.5, 0.9] : [0, 0];
+            maskValue = mask ? [0.1, 0.7] : [0, 0];
         } else {
             maskValue = mask;
         }
@@ -658,8 +664,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         if (mode === 'vertical') {
             this.contentRef.style.paddingTop = `${centerOffset + indicatorUpMargin}px`;
             this.contentRef.style.paddingLeft = '0px';
-            this.indicatorRef.style.top = `${centerOffset + indicatorUpMargin}px`;
-            this.indicatorRef.style.left = '0px';
             this.maskRef1.style.width = '100%';
             this.maskRef1.style.height = `${centerOffset}px`;
             this.maskRef2.style.top = `${centerOffset + indicatorSize}px`;
@@ -669,8 +673,6 @@ export default class Picker extends React.Component<IPickerProps, IPickerState> 
         } else {
             this.contentRef.style.paddingTop = '0px';
             this.contentRef.style.paddingLeft = `${centerOffset + indicatorUpMargin}px`;
-            this.indicatorRef.style.top = '0px';
-            this.indicatorRef.style.left = `${centerOffset + indicatorUpMargin}px`;
             this.maskRef1.style.height = '100%';
             this.maskRef1.style.width = `${centerOffset}px`;
             this.maskRef2.style.top = '0px';

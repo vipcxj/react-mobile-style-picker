@@ -1,5 +1,6 @@
 import { boolean, number, select } from '@storybook/addon-knobs';
 import { storiesOf } from '@storybook/react';
+import cs from 'classnames';
 import * as React from 'react';
 import { Picker } from '../src/index';
 import './index.css';
@@ -154,39 +155,74 @@ stories.add(
     },
     { info: { inline: true }},
 );
+const LoadingIcon = (props: { className: string }) => (
+    <div className={cs("sk-circle", props.className)}>
+        <div className="sk-circle1 sk-child"/>
+        <div className="sk-circle2 sk-child"/>
+        <div className="sk-circle3 sk-child"/>
+        <div className="sk-circle4 sk-child"/>
+        <div className="sk-circle5 sk-child"/>
+        <div className="sk-circle6 sk-child"/>
+        <div className="sk-circle7 sk-child"/>
+        <div className="sk-circle8 sk-child"/>
+        <div className="sk-circle9 sk-child"/>
+        <div className="sk-circle10 sk-child"/>
+        <div className="sk-circle11 sk-child"/>
+        <div className="sk-circle12 sk-child"/>
+    </div>
+);
 stories.add(
     'nested',
     () => {
+        const margin = (offset: number) => offset === 0 ? 24 : 0;
+        const indicator = (key: string, size: number, marginStart: number, marginEnd: number) => (
+            <div key={key} className="indicator">
+                <div className="icons" style={{ width: size + marginStart + marginEnd }}>
+                    <LoadingIcon className="icon left-icon"/>
+                    <LoadingIcon className="icon right-icon"/>
+                </div>
+            </div>
+        );
         return (
-            <Picker mode="horizontal" style={{ height: 'auto' }} clickSelect={false} scrollSelect={false} size={3}>
+            <Picker
+                mode="horizontal"
+                dragSelect={false}
+                scrollSelect={false}
+                size={3}
+                itemMargin={margin}
+                itemStyle={{ padding: 0 }}
+                indicatorStyle={{ border: 'none' }}
+                indicatorComponent={indicator}
+                mask={false}
+            >
                 <Picker.Item value={0}>
-                    <Picker dragSelect={false}>
-                        <Picker.Item value={0} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>zero</Picker.Item>
-                        <Picker.Item value={1} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>one</Picker.Item>
-                        <Picker.Item value={2} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>two</Picker.Item>
-                        <Picker.Item value={3} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>three</Picker.Item>
-                        <Picker.Item value={4} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>four</Picker.Item>
-                        <Picker.Item value={5} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>five</Picker.Item>
+                    <Picker>
+                        <Picker.Item value={0}>zero</Picker.Item>
+                        <Picker.Item value={1}>one</Picker.Item>
+                        <Picker.Item value={2}>two</Picker.Item>
+                        <Picker.Item value={3}>three</Picker.Item>
+                        <Picker.Item value={4}>four</Picker.Item>
+                        <Picker.Item value={5}>five</Picker.Item>
                     </Picker>
                 </Picker.Item>
                 <Picker.Item value={1}>
-                    <Picker dragSelect={false}>
-                        <Picker.Item value={0} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>zero</Picker.Item>
-                        <Picker.Item value={1} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>one</Picker.Item>
-                        <Picker.Item value={2} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>two</Picker.Item>
-                        <Picker.Item value={3} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>three</Picker.Item>
-                        <Picker.Item value={4} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>four</Picker.Item>
-                        <Picker.Item value={5} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>five</Picker.Item>
+                    <Picker>
+                        <Picker.Item value={0}>zero</Picker.Item>
+                        <Picker.Item value={1}>one</Picker.Item>
+                        <Picker.Item value={2}>two</Picker.Item>
+                        <Picker.Item value={3}>three</Picker.Item>
+                        <Picker.Item value={4}>four</Picker.Item>
+                        <Picker.Item value={5}>five</Picker.Item>
                     </Picker>
                 </Picker.Item>
                 <Picker.Item value={2}>
-                    <Picker dragSelect={false}>
-                        <Picker.Item value={0} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>zero</Picker.Item>
-                        <Picker.Item value={1} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>one</Picker.Item>
-                        <Picker.Item value={2} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>two</Picker.Item>
-                        <Picker.Item value={3} style={{ backgroundColor: 'rgba(0, 255, 255)' }}>three</Picker.Item>
-                        <Picker.Item value={4} style={{ backgroundColor: 'rgba(255, 0, 255)' }}>four</Picker.Item>
-                        <Picker.Item value={5} style={{ backgroundColor: 'rgba(255, 255, 0)' }}>five</Picker.Item>
+                    <Picker>
+                        <Picker.Item value={0}>zero</Picker.Item>
+                        <Picker.Item value={1}>one</Picker.Item>
+                        <Picker.Item value={2}>two</Picker.Item>
+                        <Picker.Item value={3}>three</Picker.Item>
+                        <Picker.Item value={4}>four</Picker.Item>
+                        <Picker.Item value={5}>five</Picker.Item>
                     </Picker>
                 </Picker.Item>
             </Picker>

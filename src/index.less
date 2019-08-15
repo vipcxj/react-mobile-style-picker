@@ -88,14 +88,29 @@
   pointer-events: none;
 }
 
+@indicator-border-width: 1px;
+@indicator-border-color: #ddd;
+
 .m-style-picker-indicator-vertical {
-  border-top: 1px solid #ddd;
-  border-bottom: 1px solid #ddd;
+  border-top: @indicator-border-width solid @indicator-border-color;
+  border-bottom: @indicator-border-width solid @indicator-border-color;
+  margin-top: auto;
+  margin-bottom: auto;
+  width: 100%;
+  left: 0;
+  top: 0;
+  bottom: 0;
 }
 
 .m-style-picker-indicator-horizontal {
-  border-left: 1px solid #ddd;
-  border-right: 1px solid #ddd;
+  border-left: @indicator-border-width solid @indicator-border-color;
+  border-right: @indicator-border-width solid @indicator-border-color;
+  margin-left: auto;
+  margin-right: auto;
+  height: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
 }
 
 .m-style-picker-grids-vertical {
