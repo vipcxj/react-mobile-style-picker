@@ -210,6 +210,9 @@ export default class Picker extends React.PureComponent<IPickerProps, IPickerSta
         let Step: { move: (delta: number, mode: number) => 0|-1|1 };
 
         const onFinish = () => {
+            if (!isMoving) {
+                return;
+            }
             isMoving = false;
             let target = scroll;
 
@@ -237,7 +240,7 @@ export default class Picker extends React.PureComponent<IPickerProps, IPickerSta
         };
 
         const onMove = (y: number) => {
-            if (scrollDisabled || !isMoving) {
+            if (!isMoving) {
                 return;
             }
             const { mode = 'vertical' } = this.props;
@@ -365,12 +368,12 @@ export default class Picker extends React.PureComponent<IPickerProps, IPickerSta
         const willPreventDefault = passiveSupported ? { passive: false } : false;
         const willNotPreventDefault = passiveSupported ? { passive: true } : false;
         rootRef.addEventListener('touchstart', this.scrollHandlers.touchstart, willNotPreventDefault);
-        rootRef.addEventListener('touchcancel', this.scrollHandlers.touchcancel, willNotPreventDefault);
-        rootRef.addEventListener('touchend', this.scrollHandlers.touchend, willNotPreventDefault);
-        rootRef.addEventListener('touchmove', this.scrollHandlers.touchmove, willPreventDefault);
+        document.addEventListener('touchcancel', this.scrollHandlers.touchcancel, willNotPreventDefault);
+        document.addEventListener('touchend', this.scrollHandlers.touchend, willNotPreventDefault);
+        document.addEventListener('touchmove', this.scrollHandlers.touchmove, willPreventDefault);
         rootRef.addEventListener('mousedown', this.scrollHandlers.mousedown, willNotPreventDefault);
-        rootRef.addEventListener('mousemove', this.scrollHandlers.mousemove, willPreventDefault);
-        rootRef.addEventListener('mouseup', this.scrollHandlers.mouseup, willNotPreventDefault);
+        document.addEventListener('mousemove', this.scrollHandlers.mousemove, willPreventDefault);
+        document.addEventListener('mouseup', this.scrollHandlers.mouseup, willNotPreventDefault);
         rootRef.addEventListener('wheel', this.scrollHandlers.wheel, willPreventDefault);
         rootRef.addEventListener('mousewheel', this.scrollHandlers.wheel, willPreventDefault);
         rootRef.addEventListener('DOMMouseScroll', this.scrollHandlers.wheel, willPreventDefault);
@@ -379,12 +382,12 @@ export default class Picker extends React.PureComponent<IPickerProps, IPickerSta
     public componentWillUnmount() {
         const { rootRef } = this;
         rootRef.removeEventListener('touchstart', this.scrollHandlers.touchstart);
-        rootRef.removeEventListener('touchcancel', this.scrollHandlers.touchcancel);
-        rootRef.removeEventListener('touchend', this.scrollHandlers.touchend);
-        rootRef.removeEventListener('touchmove', this.scrollHandlers.touchmove);
+        document.removeEventListener('touchcancel', this.scrollHandlers.touchcancel);
+        document.removeEventListener('touchend', this.scrollHandlers.touchend);
+        document.removeEventListener('touchmove', this.scrollHandlers.touchmove);
         rootRef.removeEventListener('mousedown', this.scrollHandlers.mousedown);
-        rootRef.removeEventListener('mousemove', this.scrollHandlers.mousemove);
-        rootRef.removeEventListener('mouseup', this.scrollHandlers.mouseup);
+        document.removeEventListener('mousemove', this.scrollHandlers.mousemove);
+        document.removeEventListener('mouseup', this.scrollHandlers.mouseup);
         rootRef.removeEventListener('wheel', this.scrollHandlers.wheel);
         rootRef.removeEventListener('mousewheel', this.scrollHandlers.wheel);
         rootRef.removeEventListener('DOMMouseScroll', this.scrollHandlers.wheel);
