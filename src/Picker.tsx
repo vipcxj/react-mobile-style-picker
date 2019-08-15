@@ -271,18 +271,16 @@ export default class Picker extends React.PureComponent<IPickerProps, IPickerSta
             if (!Step) {
                Step = createStep(34);
             }
+            evt.preventDefault();
+            evt.stopPropagation();
             const { mode = 'vertical' } = this.props;
             if (mode === 'vertical') {
                 const delta: number = evt.deltaY;
                 const step = Step.move(delta, evt.deltaMode);
                 if (step === 1) {
-                    evt.preventDefault();
-                    evt.stopPropagation();
                     this.selectNext(this.scrollTo);
                 }
                 if (step === -1) {
-                    evt.preventDefault();
-                    evt.stopPropagation();
                     this.selectLast(this.scrollTo);
                 }
             }
