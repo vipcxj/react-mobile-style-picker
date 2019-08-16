@@ -34,6 +34,7 @@ export default {
     copy({
       targets: [
         { src: 'src/index.less', dest: 'dist' },
+        { src: 'src/loading.css', dest: 'dist' },
       ],
     }),
   ],
