@@ -37,7 +37,7 @@ Using [npm](https://www.npmjs.com/):
 ```javascript
 import React from 'react';
 import { Picker } from 'react-mobile-style-picker';
-import 'react-mobile-style-picker/index.css' // or index.less
+import 'react-mobile-style-picker/dist/index.css' // or index.less
 
 const App = (
   <Picker>
